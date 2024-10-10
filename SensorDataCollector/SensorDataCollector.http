@@ -1,0 +1,6 @@
+@SensorDataCollector_HostAddress = http://localhost:5252
+
+GET {{SensorDataCollector_HostAddress}}/sensorsstatus/
+Accept: application/json
+
+###
