@@ -1,5 +1,6 @@
 ﻿@page "/dashboard"
 @using CoreUtility
+@implements IDisposable
 @attribute [StreamRendering]
 
 <PageTitle>Dashboard</PageTitle>
@@ -7,6 +8,7 @@
 <h1>Dashboard</h1>
 
 <p>Sensors statuses.</p>
+<p>@errorText</p>
 
 @if (updates == null)
 {
@@ -29,7 +31,7 @@ else
             {
                 <tr>
                     <td>@update.TimeStamp.ToLocalTime()</td>
-                    @if (update.SensorData == null) continue; //TODO: Show message data for this timeStamp unavailable
+                    @if (update.SensorData == null) continue; 
                     @foreach (var sensorData in update.SensorData)
                     {
                         <td>@sensorData.Temperature</td>
@@ -41,10 +43,34 @@ else
 }
 
 @code {
+    public void Dispose()
+    {
+
+    }
+
     private List<SensorsStatus> updates = new List<SensorsStatus>();
-    private SensorsStatus? update;
+    private string errorText { get; set; }
 
     protected override async Task OnInitializedAsync()
+    {
+        SensorsStatus? update;
+
+        //set timer
+        var timer = new PeriodicTimer(TimeSpan.FromSeconds(10));
+
+        while (await timer.WaitForNextTickAsync())
+        {
+            update = await GetUpdate();
+
+            if (update != null)
+            {
+                updates.Add(update);
+                StateHasChanged();
+            }
+        }
+    }
+
+    private async Task<SensorsStatus?> GetUpdate()
     {
         using (HttpClient client = new HttpClient())
         {
@@ -58,17 +84,19 @@ else
                 string responseData = await response.Content.ReadAsStringAsync();
                 Console.WriteLine(responseData);
 
-                update = JsonConvert.DeserializeObject<SensorsStatus?>(responseData);
-
-                if (update != null)
-                {
-                    updates.Add(update);
-                }
+                var update = JsonConvert.DeserializeObject<SensorsStatus?>(responseData);
                 Console.WriteLine("read");
+
+                await InvokeAsync(StateHasChanged);
+                return update;
             }
             catch (HttpRequestException e)
             {
                 Console.WriteLine($"Request error: {e.Message}");
+                errorText = e.Message;
+                await InvokeAsync(StateHasChanged);
+
+                return null;
             }
         }
     }
